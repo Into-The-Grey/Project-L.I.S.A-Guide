@@ -1,11 +1,99 @@
-# Basic `dependabot.yml` file with
-
 version: 2
 updates:
-  # Enable version updates for GitHub Actions
+  # GitHub Actions updates
   - package-ecosystem: "github-actions"
-    # Workflow files stored in the default location of `.github/workflows`
-    # You don't need to specify `/.github/workflows` for `directory`. You can use `directory: "/"`.
     directory: "/"
     schedule:
       interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    reviewers:
+      - "Into-The-Grey"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Python (pip) updates
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+    reviewers:
+      - "Into-The-Grey"
+    ignore:
+      - dependency-name: "some-package" # Example to exclude specific dependencies
+        versions: [">=2.0.0"] # Ignore updates above a specific version
+
+  # Node.js (npm) updates
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "javascript"
+    reviewers:
+      - "Into-The-Grey"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    open-pull-requests-limit: 5
+
+  # Docker updates
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "docker"
+    reviewers:
+      - "Into-The-Grey"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Terraform updates
+  - package-ecosystem: "terraform"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "terraform"
+    reviewers:
+      - "Into-The-Grey"
+
+  # Git submodules updates
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "gitsubmodule"
+    reviewers:
+      - "Into-The-Grey"
+
+  # Add support for additional tools or ecosystems here
+  # Example: Maven (Java)
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "java"
+
+  # Example: Gradle (Java)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "java"
