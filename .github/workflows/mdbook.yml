@@ -100,13 +100,12 @@ jobs:
       - name: Generate changelog, summary, and README
         run: |
           git fetch --prune --unshallow || true
-          LAST_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           NEW_TAG="v$(date +'%Y.%m.%d.%H%M%S')"
           git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
           echo "# Summary" > src/SUMMARY.md
           echo "- [Introduction](README.md)" >> src/SUMMARY.md
           echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
-
           echo "| Commit | Author | Message | Date |" > src/changelog.md
           echo "|--------|--------|---------|------|" >> src/changelog.md
           cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
