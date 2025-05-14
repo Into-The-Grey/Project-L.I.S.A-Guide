@@ -8,14 +8,14 @@ on:
 
 # 🔐 Permissions Required for GitHub Pages and artifact upload
 permissions:
-  contents: read               # 👓 Read repo contents (needed for changelog, etc.)
+  contents: read               # 💏 Read repo contents (needed for changelog, etc.)
   pages: write                 # 📝 Permission to publish to GitHub Pages
   id-token: write              # 🔑 Required for authentication with GitHub Pages
 
-# 🚦 Concurrency Control
+# ⎦ Concurrency Control
 concurrency:
   group: "pages"               # 🧃 Group deployments to avoid collisions
-  cancel-in-progress: false    # 🕰️ Don't cancel an ongoing deployment
+  cancel-in-progress: false    # 🧠 Don't cancel an ongoing deployment
 
 # 🛠️ Build Job
 jobs:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest     # 🧱 Use the latest Ubuntu image
     env:
       MDBOOK_VERSION: 0.4.36   # 📘 Specific mdBook version
-      INSTALL_CLEAN: false     # 🧼 Flag to force theme reinstall
+      INSTALL_CLEAN: false     # 🫼 Flag to force theme reinstall
 
     steps:
       # 📂 Step 1: Clone Repository
@@ -56,10 +56,10 @@ jobs:
       # 🎨 Step 5: Inject Interactive Theme (JS + CSS)
       - name: Install custom theme for interactivity
         run: |
-          mkdir -p src/theme
+          mkdir -p theme
 
           # 📜 Add JavaScript enhancements
-          if [[ "$INSTALL_CLEAN" == "true" || ! -f src/theme/custom.js ]]; then
+          if [[ "$INSTALL_CLEAN" == "true" || ! -f theme/custom.js ]]; then
             echo 'window.addEventListener("DOMContentLoaded", () => {
               document.querySelectorAll("table").forEach(table => {
                 table.style.overflowX = "auto";
@@ -83,18 +83,18 @@ jobs:
               fab.title = "Scroll to Top";
               fab.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
               document.body.appendChild(fab);
-            });' > src/theme/custom.js
+            });' > theme/custom.js
           fi
 
           # 🎨 Add CSS for transitions & hover feedback
-          if [[ "$INSTALL_CLEAN" == "true" || ! -f src/theme/custom.css ]]; then
+          if [[ "$INSTALL_CLEAN" == "true" || ! -f theme/custom.css ]]; then
             echo 'html { scroll-behavior: smooth; }
             nav { touch-action: pan-y; }
             button:hover { filter: brightness(1.2); }
-            body { transition: background 0.3s ease-in-out, color 0.3s ease-in-out; }' > src/theme/custom.css
+            body { transition: background 0.3s ease-in-out, color 0.3s ease-in-out; }' > theme/custom.css
           fi
 
-          # 🧰 Create book.toml with theme references
+          # 🪧 Create book.toml with theme references
           if [[ "$INSTALL_CLEAN" == "true" || ! -f book.toml ]]; then
             echo "[book]" > book.toml
             echo "title = \"My Book\"" >> book.toml
@@ -108,11 +108,11 @@ jobs:
       - name: Build with mdBook and plugins
         run: |
           source $HOME/.cargo/env
-          mdbook build                    # 📘 Generate static HTML
-          mdbook-pdf ./                   # 🧾 Create a downloadable PDF
-          cd book && zip -r ../book.zip . && cd ..  # 💾 Zip the site
+          mdbook build
+          mdbook-pdf ./
+          cd book && zip -r ../book.zip . && cd ..
 
-      # 🧠 Step 7: Generate Changelog, Summary & README
+      # 🧐 Step 7: Generate Changelog, Summary & README
       - name: Generate changelog, summary, and README
         run: |
           git fetch --prune --unshallow || true
@@ -139,7 +139,7 @@ jobs:
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv src/theme/* book.toml
+          git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv theme/* book.toml
           git commit -m "chore: update changelog, summary, README, and interactivity theme"
           git tag $NEW_TAG
           git push origin $NEW_TAG
@@ -175,8 +175,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build  # ⏳ Wait for the build job to complete
+    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4  # 🔄 Push the final site live
+        uses: actions/deploy-pages@v4
