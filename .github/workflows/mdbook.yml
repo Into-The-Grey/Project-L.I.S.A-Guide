@@ -1,53 +1,177 @@
-# Sample workflow for building and deploying a mdBook site to GitHub Pages
-#
-# To get started with mdBook see: https://rust-lang.github.io/mdBook/index.html
-#
 name: Deploy mdBook site to Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: ["main"]  # 📌 Trigger on push to main branch
+  workflow_dispatch:     # 🚀 Allow manual run via GitHub UI
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: read         # 👓 Read-only access to repo content
+  pages: write           # ✍️ Allow writing to GitHub Pages
+  id-token: write        # 🔐 Required for OIDC authentication
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: "pages"         # 🧠 Prevent multiple page deployments from overlapping
+  cancel-in-progress: false  # ⛔ Don’t cancel running deploys
 
 jobs:
-  # Build job
   build:
     runs-on: ubuntu-latest
     env:
-      MDBOOK_VERSION: 0.4.36
+      MDBOOK_VERSION: 0.4.36    # 📘 mdBook version to install
+      INSTALL_CLEAN: false      # 🧼 Toggle to clean-install the theme
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Install mdBook
+      # 📥 Step 1: Clone repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 🚄 Step 2: Cache Rust dependencies for faster builds
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # 🔧 Step 3: Install mdBook + community plugins
+      - name: Install mdBook and plugins
         run: |
-          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf -y | sh
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
           rustup update
           cargo install --version ${MDBOOK_VERSION} mdbook
-      - name: Setup Pages
+          cargo install mdbook-mermaid mdbook-toc mdbook-open-on-gh mdbook-pdf mdbook-search
+
+      # ⚙️ Step 4: Configure GitHub Pages deployment
+      - name: Setup GitHub Pages
         id: pages
         uses: actions/configure-pages@v5
-      - name: Build with mdBook
-        run: mdbook build
-      - name: Upload artifact
+
+      # 🎨 Step 5: Add custom interactive theme (mobile/tablet friendly)
+      - name: Install custom theme for interactivity
+        run: |
+          mkdir -p src/theme
+
+          # Inject interactive JavaScript if not present or INSTALL_CLEAN is set
+          if [[ "$INSTALL_CLEAN" == "true" || ! -f src/theme/custom.js ]]; then
+            echo 'window.addEventListener("DOMContentLoaded", () => {
+              document.querySelectorAll("table").forEach(table => {
+                table.style.overflowX = "auto";
+                table.style.display = "block";
+              });
+
+              // 🧲 Floating Action Button (FAB)
+              const fab = document.createElement("button");
+              fab.textContent = "↑";
+              fab.style.position = "fixed";
+              fab.style.bottom = "2rem";
+              fab.style.right = "2rem";
+              fab.style.padding = "1rem";
+              fab.style.fontSize = "1.5rem";
+              fab.style.borderRadius = "50%";
+              fab.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)";
+              fab.style.zIndex = "9999";
+              fab.style.border = "none";
+              fab.style.background = "#007acc";
+              fab.style.color = "white";
+              fab.style.cursor = "pointer";
+              fab.style.transition = "opacity 0.3s ease-in-out";
+              fab.title = "Scroll to Top";
+              fab.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+              document.body.appendChild(fab);
+            });' > src/theme/custom.js
+          fi
+
+          # Inject matching CSS for transitions, scroll behavior, and hover effects
+          if [[ "$INSTALL_CLEAN" == "true" || ! -f src/theme/custom.css ]]; then
+            echo 'html { scroll-behavior: smooth; }
+            nav { touch-action: pan-y; }
+            button:hover { filter: brightness(1.2); }
+            body { transition: background 0.3s ease-in-out, color 0.3s ease-in-out; }' > src/theme/custom.css
+          fi
+
+          # 📘 Configure mdBook if not already done
+          if [[ "$INSTALL_CLEAN" == "true" || ! -f book.toml ]]; then
+            echo "[book]" > book.toml
+            echo "title = \"My Book\"" >> book.toml
+            echo "[output.html]" >> book.toml
+            echo "default-theme = \"light\"" >> book.toml
+            echo "additional-js = [\"theme/custom.js\"]" >> book.toml
+            echo "additional-css = [\"theme/custom.css\"]" >> book.toml
+          fi
+
+      # 🏗 Step 6: Build static site, generate PDF and zip archive
+      - name: Build with mdBook and plugins
+        run: |
+          source $HOME/.cargo/env
+          mdbook build
+          mdbook-pdf ./
+          cd book && zip -r ../book.zip . && cd ..
+
+      # 🧾 Step 7: Generate dynamic changelog, summary, and project intro
+      - name: Generate changelog, summary, and README
+        run: |
+          git fetch --prune --unshallow || true
+          LAST_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+          NEW_TAG="v$(date +'%Y.%m.%d.%H%M%S')"
+
+          # 📋 Generate CSV changelog from Git logs
+          git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
+
+          # 🗂 Update SUMMARY.md for mdBook navigation
+          echo "# Summary" > src/SUMMARY.md
+          echo "- [Introduction](README.md)" >> src/SUMMARY.md
+          echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
+
+          # 📈 Render changelog.md as searchable table
+          echo "| Commit | Author | Message | Date |" > src/changelog.md
+          echo "|--------|--------|---------|------|" >> src/changelog.md
+          cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
+            echo "| [$hash](https://github.com/${{ github.repository }}/commit/$hash) | $author | $subject | $date |" >> src/changelog.md
+          done
+
+          # 📖 Autogenerate README.md for documentation root
+          echo "# Project Documentation" > src/README.md
+          echo "\nThis is the autogenerated documentation site for **${{ github.repository }}**." >> src/README.md
+          echo "\n- 📘 Built using **mdBook** ${MDBOOK_VERSION}" >> src/README.md
+          echo "- 🕒 Version: $NEW_TAG" >> src/README.md
+          echo "- 🔗 View online: [GitHub Pages](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }})" >> src/README.md
+
+          # 📝 Commit all the generated content
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv src/theme/* book.toml
+          git commit -m "chore: update changelog, summary, README, and interactivity theme"
+          git tag $NEW_TAG
+          git push origin $NEW_TAG
+          git push origin main
+
+      # 📦 Upload artifacts for GitHub Pages and CI downloads
+      - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./L.I.S.A
+          path: ./book
 
-  # Deployment job
+      - name: Upload PDF version
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdbook-pdf
+          path: book.pdf
+
+      - name: Upload ZIP version
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdbook-zip
+          path: book.zip
+
+      - name: Upload Changelog CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog-csv
+          path: CHANGELOG.csv
+
   deploy:
     environment:
       name: github-pages
