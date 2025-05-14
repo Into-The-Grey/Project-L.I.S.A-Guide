@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -33,13 +33,34 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install mdBook and plugins
+      - name: Cache mdBook and plugin binaries
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-bin-${{ env.MDBOOK_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-bin-
+
+      - name: Install Rust toolchain (if needed)
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          fi
           source $HOME/.cargo/env
-          rustup update
-          cargo install --version ${MDBOOK_VERSION} mdbook
-          cargo install mdbook-mermaid mdbook-toc mdbook-open-on-gh
+
+      - name: Install mdBook and plugins (if needed)
+        run: |
+          source $HOME/.cargo/env
+          # Only install mdbook if the correct version isn't present
+          if ! command -v mdbook >/dev/null || ! mdbook --version 2>/dev/null | grep -q "${MDBOOK_VERSION}"; then
+            cargo install --force --version ${MDBOOK_VERSION} mdbook
+          fi
+          # Install plugins only if missing
+          for plugin in mdbook-mermaid mdbook-toc mdbook-open-on-gh; do
+            if ! command -v $plugin >/dev/null; then
+              cargo install $plugin
+            fi
+          done
 
       - name: Setup GitHub Pages
         id: pages
@@ -98,7 +119,6 @@ jobs:
            touch /home/runner/snap/chromium/common/.cache/desktop-runtime-date
            chromium-browser --headless --disable-gpu --no-sandbox --disable-dev-shm-usage --print-to-pdf=book.pdf book/index.html
            cd book && zip -r ../book.zip . && cd ..
-
 
       - name: Generate changelog, summary, and README
         run: |
