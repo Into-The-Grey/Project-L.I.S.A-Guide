@@ -1,0 +1,6 @@
+[book]
+title = "My Book"
+[output.html]
+default-theme = "light"
+additional-js = ["theme/custom.js"]
+additional-css = ["theme/custom.css"]

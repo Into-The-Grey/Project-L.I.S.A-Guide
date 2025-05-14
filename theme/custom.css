@@ -1,0 +1,4 @@
+html { scroll-behavior: smooth; }
+  nav { touch-action: pan-y; }
+  button:hover { filter: brightness(1.2); }
+  body { transition: background 0.3s ease-in-out, color 0.3s ease-in-out; }
