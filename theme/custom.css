@@ -1,4 +1,13 @@
 html { scroll-behavior: smooth; }
-  nav { touch-action: pan-y; }
-  button:hover { filter: brightness(1.2); }
-  body { transition: background 0.3s ease-in-out, color 0.3s ease-in-out; }
+nav { touch-action: pan-y; }
+body { transition: background 0.3s, color 0.3s; }
+button:hover { filter: brightness(1.15); }
+.sidebar-hidden .sidebar {
+  display: none !important;
+}
+.sidebar-hidden .content {
+  margin-left: 0 !important;
+  width: 100vw !important;
+}
+.admonition { border-left: 6px solid #007acc; margin: 1em 0; padding: 1em; background: #f8fafc;}
+.admonition-title { font-weight: bold; }

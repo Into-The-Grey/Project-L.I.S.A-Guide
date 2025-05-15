@@ -1,6 +1,16 @@
 [book]
-title = "My Book"
+title = "L.I.S.A. Guide"
+authors = ["Into-The-Grey"]
+description = "A supercharged, interactive, local AI assistant documentation."
+multilingual = false
+
 [output.html]
 default-theme = "light"
 additional-js = ["theme/custom.js"]
 additional-css = ["theme/custom.css"]
+git-repository-url = "https://github.com/Into-The-Grey/Project-L.I.S.A-Guide"
+mathjax-support = true
+
+[preprocessor.toc]
+[preprocessor.mermaid]
+[preprocessor.open-on-gh]
