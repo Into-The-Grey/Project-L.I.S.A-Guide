@@ -1,0 +1,248 @@
+name: Auto-generate Glossary for mdBook
+
+on:
+  push:
+    paths:
+      - 'L.I.S.A/src/**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-glossary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Count .md files and compare with last run
+        id: page_count
+        run: |
+          COUNT=$(find L.I.S.A/src -name "*.md" | wc -l)
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "$COUNT" > last_page_count.txt
+
+      - name: Download previous workflow artifact if available
+        uses: actions/download-artifact@v4
+        with:
+          name: page-count
+          path: .artifacts
+        continue-on-error: true
+
+      - name: Compare with previous count
+        id: changed
+        run: |
+          LAST_COUNT="0"
+          if [ -f .artifacts/last_page_count.txt ]; then
+            LAST_COUNT=$(cat .artifacts/last_page_count.txt)
+          fi
+          echo "Last count: $LAST_COUNT, New count: ${{ steps.page_count.outputs.count }}"
+          if [ "$LAST_COUNT" != "${{ steps.page_count.outputs.count }}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Parse terms and build glossary
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          python3 <<EOF
+          import os
+          import re
+          import csv
+          import json
+          from collections import defaultdict
+          
+          SRC = "L.I.S.A/src"
+          GLOSSARY_DIR = os.path.join(SRC, "Glossary")
+          os.makedirs(GLOSSARY_DIR, exist_ok=True)
+          glossary = defaultdict(list)
+          synonym_map = defaultdict(set)  # term -> set of synonyms
+          term_defs = {}
+          all_terms = set()
+          
+          # Patterns
+          glossary_block_pat = re.compile(r":::glossary\s*\n([\s\S]+?):::", re.MULTILINE)
+          term_line_pat = re.compile(r"^\*\*(.+?)\*\*:\s*(.+)$", re.MULTILINE)
+          heading_pat = re.compile(r"^#{1,3}\s+Glossary[:\-]?\s*(.+)$", re.MULTILINE)
+          plain_heading_pat = re.compile(r"^#{1,3}\s+(.+)$", re.MULTILINE)
+          # Synonyms/Aliases: "Term (alias, alt): def", or "Term|alias1|alias2: def"
+          synonym_inline_pat = re.compile(r"^\*\*([^\*\:]+)[ \(\|]([^)|\:]+)[\)]?\*\*:\s*(.+)$", re.MULTILINE)
+          
+          def slugify(term):
+              slug = re.sub(r'[^\w\s-]', '', term).strip().replace(' ', '-').lower()
+              return re.sub(r'-+', '-', slug)
+          
+          def norm_term(term):
+              t = term.lower()
+              for prefix in ('the ', 'a ', 'an '):
+                  if t.startswith(prefix):
+                      t = t[len(prefix):]
+              return t.strip()
+          
+          for root, dirs, files in os.walk(SRC):
+              for file in files:
+                  if file.endswith(".md") and not file.startswith("_"):
+                      abs_path = os.path.abspath(os.path.join(root, file)).lower()
+                      # Skip self-generated glossary only
+                      if abs_path.endswith("/glossary/readme.md") or abs_path.endswith("\\glossary\\readme.md"):
+                          continue
+                      rel = os.path.relpath(os.path.join(root, file), SRC).replace("\\", "/")
+                      with open(os.path.join(root, file), encoding="utf-8") as f:
+                          text = f.read()
+          
+                          # 1. :::glossary blocks (with aliases allowed, eg: Term (aka, alt): Def)
+                          for block in glossary_block_pat.findall(text):
+                              for line in block.split("\n"):
+                                  m = re.match(r"^\s*([^\:]+):\s*(.+)$", line)
+                                  if m:
+                                      term_full, definition = m.group(1).strip(), m.group(2).strip()
+                                      if "|" in term_full:
+                                          names = [t.strip() for t in term_full.split("|")]
+                                          main = names[0]
+                                          for alias in names[1:]:
+                                              synonym_map[norm_term(main)].add(norm_term(alias))
+                                              synonym_map[norm_term(alias)].add(norm_term(main))
+                                          term = main
+                                      elif "(" in term_full and ")" in term_full:
+                                          # "Term (aka, alt)"
+                                          main, alii = term_full.split("(", 1)
+                                          main = main.strip()
+                                          alii = [a.strip() for a in alii.rstrip(")").split(",")]
+                                          for alias in alii:
+                                              synonym_map[norm_term(main)].add(norm_term(alias))
+                                              synonym_map[norm_term(alias)].add(norm_term(main))
+                                          term = main
+                                      else:
+                                          term = term_full.strip()
+                                      norm = norm_term(term)
+                                      glossary[norm[0].upper()].append(
+                                          (term, definition, f"{rel}#{slugify(term)}"))
+                                      all_terms.add(norm)
+                                      term_defs[norm] = definition
+          
+                          # 2. **Term:** pattern (with alias parsing)
+                          for m in synonym_inline_pat.finditer(text):
+                              main, alii, definition = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+                              aliases = [a.strip() for a in re.split("[,|]", alii)]
+                              for alias in aliases:
+                                  synonym_map[norm_term(main)].add(norm_term(alias))
+                                  synonym_map[norm_term(alias)].add(norm_term(main))
+                              norm = norm_term(main)
+                              glossary[norm[0].upper()].append(
+                                  (main, definition, f"{rel}#{slugify(main)}"))
+                              all_terms.add(norm)
+                              term_defs[norm] = definition
+                          # Fallback: just **Term:** def
+                          for m in term_line_pat.finditer(text):
+                              term = m.group(1).strip()
+                              definition = m.group(2).strip()
+                              norm = norm_term(term)
+                              if norm not in all_terms:
+                                  glossary[norm[0].upper()].append(
+                                      (term, definition, f"{rel}#{slugify(term)}"))
+                                  term_defs[norm] = definition
+                                  all_terms.add(norm)
+          
+                          # 3. ## Glossary: Term
+                          for m in heading_pat.finditer(text):
+                              term = m.group(1).strip()
+                              norm = norm_term(term)
+                              if norm not in all_terms:
+                                  glossary[norm[0].upper()].append(
+                                      (term, "", f"{rel}#{slugify(term)}"))
+                                  all_terms.add(norm)
+          
+                          # 4. ## Term pattern (last resort, no definition)
+                          for m in plain_heading_pat.finditer(text):
+                              term = m.group(1).strip()
+                              if 2 <= len(term) <= 40 and not any(term.lower() == w for w in (
+                                  "introduction", "conclusion", "readme", "summary", "changelog", "glossary"
+                              )):
+                                  norm = norm_term(term)
+                                  if norm not in all_terms:
+                                      glossary[norm[0].upper()].append(
+                                          (term, "", f"{rel}#{slugify(term)}"))
+                                      all_terms.add(norm)
+          
+          # Dedupe and sort
+          final_glossary = defaultdict(list)
+          for letter in sorted(glossary.keys()):
+              seen = set()
+              for term, definition, link in sorted(glossary[letter], key=lambda x: norm_term(x[0])):
+                  nterm = norm_term(term)
+                  if nterm not in seen:
+                      final_glossary[letter].append((term, definition, link))
+                      seen.add(nterm)
+          
+          # Build Table of Contents with emoji
+          letters = sorted(final_glossary.keys())
+          toc = " | ".join(f"<a name='jump-{l}'></a>🅻[{l}](#{l})" for l in letters)
+          
+          # Write new glossary to a temp file
+          out_file = os.path.join(GLOSSARY_DIR, "README.md")
+          tmp_file = out_file + ".tmp"
+          with open(tmp_file, "w", encoding="utf-8") as f:
+              f.write("# 📚 Glossary\n\n")
+              f.write("> _This page is **auto-generated**. To add a term, use a `:::glossary` block, a heading like `## Glossary: Term`, or a bold line like `**Term:** definition` in any `.md` file!_\n\n")
+              f.write("**Table of Contents:** <a name='jump-toc'></a>\n\n")
+              f.write(toc + "\n\n")
+              for letter in letters:
+                  f.write(f"## {letter}\n\n")
+                  for term, definition, link in final_glossary[letter]:
+                      entry = f"- <span style='font-weight:bold'>[{term}]({link})</span>"
+                      if definition:
+                          entry += f": {definition}"
+                      # Add synonyms if any
+                      norm = norm_term(term)
+                      if synonym_map[norm]:
+                          entry += f"  \n  _Aliases:_ " + ", ".join(sorted(synonym_map[norm]))
+                      f.write(entry + "\n")
+                  f.write("\n[⬆️ Back to TOC](#jump-toc)\n\n")
+          
+          # Export to CSV and JSON
+          with open(os.path.join(GLOSSARY_DIR, "glossary.csv"), "w", newline='', encoding="utf-8") as csvfile:
+              writer = csv.writer(csvfile)
+              writer.writerow(["term", "definition", "synonyms"])
+              for letter in letters:
+                  for term, definition, _ in final_glossary[letter]:
+                      norm = norm_term(term)
+                      writer.writerow([term, definition, "; ".join(sorted(synonym_map[norm])) if synonym_map[norm] else ""])
+          
+          glossary_data = []
+          for letter in letters:
+              for term, definition, link in final_glossary[letter]:
+                  norm = norm_term(term)
+                  glossary_data.append({
+                      "term": term,
+                      "definition": definition,
+                      "synonyms": sorted(synonym_map[norm]) if synonym_map[norm] else [],
+                      "link": link,
+                      "letter": letter
+                  })
+          with open(os.path.join(GLOSSARY_DIR, "glossary.json"), "w", encoding="utf-8") as jf:
+              json.dump(glossary_data, jf, ensure_ascii=False, indent=2)
+          
+          # Only overwrite if contents changed (avoids useless git commits)
+          if not os.path.exists(out_file) or open(out_file, encoding="utf-8").read() != open(tmp_file, encoding="utf-8").read():
+              os.replace(tmp_file, out_file)
+          else:
+              os.remove(tmp_file)
+          print(f"Wrote {sum(len(v) for v in final_glossary.values())} terms to glossary.")
+          EOF
+
+      - name: Commit and push updated Glossary
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add L.I.S.A/src/Glossary/README.md last_page_count.txt
+          git commit -m "Auto-update glossary (page count changed)"
+          git push
+
+      - name: Upload last page count artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-count
+          path: last_page_count.txt
