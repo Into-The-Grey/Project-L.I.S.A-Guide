@@ -79,7 +79,7 @@ jobs:
       
           cargo install --force --version "$MDBOOK_VERSION" mdbook
       
-          PLUGINS="mdbook-mermaid mdbook-toc mdbook-open-on-gh mdbook-admonish"
+          PLUGINS="mdbook-mermaid mdbook-toc mdbook-open-on-gh"
           echo "Checking plugins..."
           for plugin in $PLUGINS; do
             echo "Installing/upgrading $plugin ..."
@@ -89,11 +89,6 @@ jobs:
               echo "WARNING: $plugin failed to install. It may be incompatible with mdBook $MDBOOK_VERSION. Skipping."
             fi
           done
-          
-          # Install mdbook-admonish assets
-          if command -v mdbook-admonish >/dev/null; then
-            mdbook-admonish install
-          fi
       
           mdbook --version
           for plugin in $PLUGINS; do
@@ -182,7 +177,6 @@ jobs:
           [preprocessor.toc]
           [preprocessor.mermaid]
           [preprocessor.open-on-gh]
-          [preprocessor.admonish]
           TOML
 
       - name: Build mdBook, generate PDF & ZIP
