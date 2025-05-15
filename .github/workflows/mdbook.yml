@@ -41,120 +41,149 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-bin-
 
-      - name: Install Rust toolchain (if needed)
+      - name: Install Rust toolchain and mdBook plugins
         run: |
           if ! command -v rustup >/dev/null; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           fi
           source $HOME/.cargo/env
-
-      - name: Install mdBook and plugins (if needed)
-        run: |
-          source $HOME/.cargo/env
-          # Only install mdbook if the correct version isn't present
-          if ! command -v mdbook >/dev/null || ! mdbook --version 2>/dev/null | grep -q "${MDBOOK_VERSION}"; then
+          if ! command -v mdbook >/dev/null || ! mdbook --version | grep -q "${MDBOOK_VERSION}"; then
             cargo install --force --version ${MDBOOK_VERSION} mdbook
           fi
-          # Install plugins only if missing
-          for plugin in mdbook-mermaid mdbook-toc mdbook-open-on-gh; do
+          for plugin in mdbook-mermaid mdbook-toc mdbook-open-on-gh mdbook-admonish; do
             if ! command -v $plugin >/dev/null; then
               cargo install $plugin
             fi
           done
 
-      - name: Setup GitHub Pages
-        id: pages
-        uses: actions/configure-pages@v5
-
-      - name: Install custom theme for interactivity
+      - name: Setup mdBook theme, config, and plugins
         run: |
           mkdir -p theme
-          if [[ "$INSTALL_CLEAN" == "true" || ! -f theme/custom.js ]]; then
-            echo 'window.addEventListener("DOMContentLoaded", () => {
-              document.querySelectorAll("table").forEach(table => {
-                table.style.overflowX = "auto";
-                table.style.display = "block";
-              });
-              const fab = document.createElement("button");
-              fab.textContent = "↑";
-              fab.style.position = "fixed";
-              fab.style.bottom = "2rem";
-              fab.style.right = "2rem";
-              fab.style.padding = "1rem";
-              fab.style.fontSize = "1.5rem";
-              fab.style.borderRadius = "50%";
-              fab.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)";
-              fab.style.zIndex = "9999";
-              fab.style.border = "none";
-              fab.style.background = "#007acc";
-              fab.style.color = "white";
-              fab.style.cursor = "pointer";
-              fab.style.transition = "opacity 0.3s ease-in-out";
-              fab.title = "Scroll to Top";
-              fab.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
-              document.body.appendChild(fab);
-            });' > theme/custom.js
-          fi
-          if [[ "$INSTALL_CLEAN" == "true" || ! -f theme/custom.css ]]; then
-            echo 'html { scroll-behavior: smooth; }
-            nav { touch-action: pan-y; }
-            button:hover { filter: brightness(1.2); }
-            body { transition: background 0.3s ease-in-out, color 0.3s ease-in-out; }' > theme/custom.css
-          fi
-          if [[ "$INSTALL_CLEAN" == "true" || ! -f book.toml ]]; then
-            echo "[book]" > book.toml
-            echo "title = \"My Book\"" >> book.toml
-            echo "[output.html]" >> book.toml
-            echo "default-theme = \"light\"" >> book.toml
-            echo "additional-js = [\"theme/custom.js\"]" >> book.toml
-            echo "additional-css = [\"theme/custom.css\"]" >> book.toml
-          fi
+          # Expanded interactivity (scroll to top, toggle sidebar, etc)
+          echo 'window.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll("table").forEach(table => {
+              table.style.overflowX = "auto";
+              table.style.display = "block";
+            });
+            const fab = document.createElement("button");
+            fab.textContent = "↑";
+            fab.style.position = "fixed";
+            fab.style.bottom = "2rem";
+            fab.style.right = "2rem";
+            fab.style.padding = "1rem";
+            fab.style.fontSize = "1.5rem";
+            fab.style.borderRadius = "50%";
+            fab.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)";
+            fab.style.zIndex = "9999";
+            fab.style.border = "none";
+            fab.style.background = "#007acc";
+            fab.style.color = "white";
+            fab.style.cursor = "pointer";
+            fab.style.transition = "opacity 0.3s ease-in-out";
+            fab.title = "Scroll to Top";
+            fab.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+            document.body.appendChild(fab);
 
-      - name: Build with mdBook and generate PDF
+            // Sidebar toggle for even more interactivity!
+            const toggleSidebarBtn = document.createElement("button");
+            toggleSidebarBtn.textContent = "☰";
+            toggleSidebarBtn.style.position = "fixed";
+            toggleSidebarBtn.style.top = "1rem";
+            toggleSidebarBtn.style.left = "1rem";
+            toggleSidebarBtn.style.zIndex = "10000";
+            toggleSidebarBtn.style.background = "#007acc";
+            toggleSidebarBtn.style.color = "#fff";
+            toggleSidebarBtn.style.border = "none";
+            toggleSidebarBtn.style.padding = "0.5rem 1rem";
+            toggleSidebarBtn.style.fontSize = "1.5rem";
+            toggleSidebarBtn.style.borderRadius = "10px";
+            toggleSidebarBtn.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
+            toggleSidebarBtn.style.cursor = "pointer";
+            toggleSidebarBtn.title = "Toggle Sidebar";
+            toggleSidebarBtn.onclick = () => {
+              document.body.classList.toggle("sidebar-hidden");
+            };
+            document.body.appendChild(toggleSidebarBtn);
+          });' > theme/custom.js
+
+          echo 'html { scroll-behavior: smooth; }
+          nav { touch-action: pan-y; }
+          body { transition: background 0.3s, color 0.3s; }
+          button:hover { filter: brightness(1.15); }
+          .sidebar-hidden .sidebar {
+            display: none !important;
+          }
+          .sidebar-hidden .content {
+            margin-left: 0 !important;
+            width: 100vw !important;
+          }
+          .admonition { border-left: 6px solid #007acc; margin: 1em 0; padding: 1em; background: #f8fafc;}
+          .admonition-title { font-weight: bold; }' > theme/custom.css
+
+          cat > book.toml << TOML
+          [book]
+          title = "L.I.S.A. Guide"
+          authors = ["Into-The-Grey"]
+          description = "A supercharged, interactive, local AI assistant documentation."
+          multilingual = false
+
+          [output.html]
+          default-theme = "light"
+          additional-js = ["theme/custom.js"]
+          additional-css = ["theme/custom.css"]
+          git-repository-url = "https://github.com/Into-The-Grey/Project-L.I.S.A-Guide"
+          mathjax-support = true
+
+          [preprocessor.toc]
+          [preprocessor.mermaid]
+          [preprocessor.open-on-gh]
+          [preprocessor.admonish]
+          TOML
+
+      - name: Build mdBook, generate PDF & ZIP
         run: |
-           source $HOME/.cargo/env
-           mdbook build
-           sudo apt-get update && sudo apt-get install -y chromium-browser
-           mkdir -p /home/runner/snap/chromium/common/.cache
-           touch /home/runner/snap/chromium/common/.cache/desktop-runtime-date
-           chromium-browser --headless --disable-gpu --no-sandbox --disable-dev-shm-usage --print-to-pdf=book.pdf book/index.html
-           cd book && zip -r ../book.zip . && cd ..
+          source $HOME/.cargo/env
+          mdbook build
+          sudo apt-get update && sudo apt-get install -y chromium-browser
+          mkdir -p /home/runner/snap/chromium/common/.cache
+          touch /home/runner/snap/chromium/common/.cache/desktop-runtime-date
+          chromium-browser --headless --disable-gpu --no-sandbox --disable-dev-shm-usage --print-to-pdf=book.pdf book/index.html
+          cd book && zip -r ../book.zip . && cd ..
 
       - name: Generate changelog, summary, and README
         run: |
-           git fetch --prune --unshallow || true
-           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-           NEW_TAG="v$(date +'%Y.%m.%d.%H%M%S')"
-           if [ -z "$LAST_TAG" ]; then
-             git log --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
-           else
-             git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
-           fi
-           echo "# Summary" > src/SUMMARY.md
-           echo "- [Introduction](README.md)" >> src/SUMMARY.md
-           echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
-           echo "| Commit | Author | Message | Date |" > src/changelog.md
-           echo "|--------|--------|---------|------|" >> src/changelog.md
-           cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
-             echo "| [$hash](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/$hash) | $author | $subject | $date |" >> src/changelog.md
-           done
-           echo "" > src/README.md
-           echo "# Project Documentation" >> src/README.md
-           echo "" >> src/README.md
-           echo "This is the autogenerated documentation site for **Into-The-Grey/Project-L.I.S.A-Guide**." >> src/README.md
-           echo "" >> src/README.md
-           echo "- 📘 Built using **mdBook** ${MDBOOK_VERSION}" >> src/README.md
-           echo "- 🕒 Version: $NEW_TAG" >> src/README.md
-           echo "- 🔗 View online: [GitHub Pages](https://Into-The-Grey.github.io/Project-L.I.S.A-Guide)" >> src/README.md
-           git config user.name "github-actions"
-           git config user.email "github-actions@github.com"
-           git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv theme/* book.toml
-           git commit -m "chore: update changelog, summary, README, and interactivity theme"
-           git tag $NEW_TAG
-           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-           git push origin $NEW_TAG
-           git push origin main
-
+          git fetch --prune --unshallow || true
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          NEW_TAG="v$(date +'%Y.%m.%d.%H%M%S')"
+          if [ -z "$LAST_TAG" ]; then
+            git log --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
+          else
+            git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
+          fi
+          echo "# Summary" > src/SUMMARY.md
+          echo "- [Introduction](README.md)" >> src/SUMMARY.md
+          echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
+          echo "| Commit | Author | Message | Date |" > src/changelog.md
+          echo "|--------|--------|---------|------|" >> src/changelog.md
+          cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
+            echo "| [$hash](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/$hash) | $author | $subject | $date |" >> src/changelog.md
+          done
+          echo "" > src/README.md
+          echo "# Project Documentation" >> src/README.md
+          echo "" >> src/README.md
+          echo "This is the autogenerated documentation site for **Into-The-Grey/Project-L.I.S.A-Guide**." >> src/README.md
+          echo "" >> src/README.md
+          echo "- 📘 Built using **mdBook** ${MDBOOK_VERSION}" >> src/README.md
+          echo "- 🕒 Version: $NEW_TAG" >> src/README.md
+          echo "- 🔗 View online: [GitHub Pages](https://Into-The-Grey.github.io/Project-L.I.S.A-Guide)" >> src/README.md
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv theme/* book.toml
+          git commit -m "chore: update changelog, summary, README, and interactivity theme"
+          git tag $NEW_TAG
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git push origin $NEW_TAG
+          git push origin main
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
@@ -179,7 +208,6 @@ jobs:
           name: changelog-csv
           path: CHANGELOG.csv
 
-  # 🚀 Deployment Job
   deploy:
     environment:
       name: github-pages
