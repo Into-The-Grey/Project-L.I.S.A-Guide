@@ -8,8 +8,6 @@ on:
 permissions:
   contents: write
   actions: write
-  models: write
-  packages: write
   pages: write
   id-token: write
 
