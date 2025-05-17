@@ -1,6 +1,6 @@
 # Summary
 
-- [Local AI AssistantDevelopment Roadmap and Project Plan](L.I.S.A/Local AI Assistant Development Roadmap and Project Plan.md)
+- [Local AI Assistant Development Roadmap and Project Plan](L.I.S.A/Local AI Assistant Development Roadmap and Project Plan.md)
 
 - [Introduction](L.I.S.A/Introduction/README.md)
     - [Python](L.I.S.A/Introduction/Python.md)
