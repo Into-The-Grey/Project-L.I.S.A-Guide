@@ -199,11 +199,14 @@ jobs:
           else
             git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
           fi
-          echo "# Summary" > src/SUMMARY.md
-          echo "- [Introduction](README.md)" >> src/SUMMARY.md
-          echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
-          echo "| Commit | Author | Message | Date |" > src/changelog.md
-          echo "|--------|--------|---------|------|" >> src/changelog.md
+          # Check if src/SUMMARY.md already exists
+          if [ ! -f src/SUMMARY.md ]; then
+            echo "# Summary" > src/SUMMARY.md
+            echo "- [Introduction](README.md)" >> src/SUMMARY.md
+            echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
+            echo "| Commit | Author | Message | Date |" > src/changelog.md
+            echo "|--------|--------|---------|------|" >> src/changelog.md
+          fi
           cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
             echo "| [$hash](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/$hash) | $author | $subject | $date |" >> src/changelog.md
           done
