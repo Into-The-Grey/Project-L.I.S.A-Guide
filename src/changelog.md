@@ -6,3 +6,5 @@
 | [6319463](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/6319463) | [REDACTED] | Create README.md | 2025-05-17 |
 | [2df181c](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/2df181c) | [REDACTED] | Create README.md | 2025-05-17 |
 | [7e740d3](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/7e740d3) | [REDACTED] | Create README.md | 2025-05-17 |
+| [d75670c](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/d75670c) | [REDACTED] | Update SUMMARY.md | 2025-05-17 |
+| [f177ff5](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/f177ff5) | [REDACTED] | Update SUMMARY.md | 2025-05-17 |
