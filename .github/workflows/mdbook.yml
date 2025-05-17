@@ -1,4 +1,4 @@
-name: Build L.I.S.A MDBook
+name: L.I.S.A. Online Interactive Guide
 
 on:
   push:
@@ -16,14 +16,66 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  setup-mdbook:
+    name: Setup & Cache mdBook
     runs-on: ubuntu-latest
-    env:
-      INSTALL_CLEAN: false
-
+    outputs:
+      mdbook_version: ${{ steps.get_version.outputs.mdbook_version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Get latest mdBook version
+        id: get_version
+        run: |
+          MDBOOK_VERSION=$(curl -s https://api.github.com/repos/rust-lang/mdBook/releases/latest | grep -oP '"tag_name":\s*"\K[^"]+')
+          MDBOOK_VERSION=${MDBOOK_VERSION#v}
+          echo "mdbook_version=$MDBOOK_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Cache Rust, mdBook & Plugins
+        id: cache-mdbook
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+          key: ${{ runner.os }}-mdbook-${{ steps.get_version.outputs.mdbook_version }}
+          restore-keys: |
+            ${{ runner.os }}-mdbook-
+
+      - name: Install Rust toolchain and latest mdBook/plugins if needed
+        if: steps.cache-mdbook.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          fi
+          source $HOME/.cargo/env
+          cargo install --force --version "${{ steps.get_version.outputs.mdbook_version }}" mdbook
+          for plugin in mdbook-mermaid mdbook-toc mdbook-open-on-gh; do
+            cargo install --force "$plugin"
+          done
+
+  build-book:
+    name: Build & Package Book
+    runs-on: ubuntu-latest
+    needs: setup-mdbook
+    env:
+      MDBOOK_VERSION: ${{ needs.setup-mdbook.outputs.mdbook_version }}
+      INSTALL_CLEAN: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Restore Rust/mdBook cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+          key: ${{ runner.os }}-mdbook-${{ env.MDBOOK_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-mdbook-
 
       - name: Move SUMMARY.md and custom theme files to correct locations
         run: |
@@ -31,7 +83,7 @@ jobs:
           mkdir -p src
           mkdir -p theme
 
-          # Find SUMMARY.md not already in src/ and move it
+          # Move SUMMARY.md if needed
           FOUND_SUMMARY=$(find . -type f -iname SUMMARY.md ! -path "./src/SUMMARY.md" | head -n 1 || true)
           if [ -n "$FOUND_SUMMARY" ]; then
             echo "Found SUMMARY.md at $FOUND_SUMMARY. Moving to src/SUMMARY.md"
@@ -44,56 +96,6 @@ jobs:
             if [ -n "$FOUND_THEME" ]; then
               echo "Found $THEMEFILE at $FOUND_THEME. Moving to theme/$THEMEFILE"
               mv -f "$FOUND_THEME" theme/$THEMEFILE
-            fi
-          done
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Cache mdBook and plugin binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-bin-latest
-          restore-keys: |
-            ${{ runner.os }}-cargo-bin-
-
-      - name: Install Rust toolchain and latest mdBook + plugins
-        id: install-mdbook
-        run: |
-          set -e
-          if ! command -v rustup >/dev/null; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          fi
-          source $HOME/.cargo/env
-          # Get latest mdbook version
-          MDBOOK_VERSION=$(curl -s https://api.github.com/repos/rust-lang/mdBook/releases/latest | grep -oP '"tag_name":\s*"\K[^"]+')
-          MDBOOK_VERSION=${MDBOOK_VERSION#v}
-          echo "Latest mdBook version: $MDBOOK_VERSION"
-          echo "MDBOOK_VERSION=$MDBOOK_VERSION" >> $GITHUB_ENV
-      
-          cargo install --force --version "$MDBOOK_VERSION" mdbook
-      
-          PLUGINS="mdbook-mermaid mdbook-toc mdbook-open-on-gh"
-          echo "Checking plugins..."
-          for plugin in $PLUGINS; do
-            echo "Installing/upgrading $plugin ..."
-            if cargo install --force "$plugin"; then
-              echo "$plugin installed."
-            else
-              echo "WARNING: $plugin failed to install. It may be incompatible with mdBook $MDBOOK_VERSION. Skipping."
-            fi
-          done
-      
-          mdbook --version
-          for plugin in $PLUGINS; do
-            if command -v $plugin >/dev/null; then
-              $plugin --version || true
             fi
           done
 
@@ -156,9 +158,7 @@ jobs:
           .sidebar-hidden .content {
             margin-left: 0 !important;
             width: 100vw !important;
-          }
-          .admonition { border-left: 6px solid #007acc; margin: 1em 0; padding: 1em; background: #f8fafc;}
-          .admonition-title { font-weight: bold; }' > theme/custom.css
+          }' > theme/custom.css
 
           cat > book.toml << TOML
           [book]
@@ -189,44 +189,6 @@ jobs:
           chromium-browser --headless --disable-gpu --no-sandbox --disable-dev-shm-usage --print-to-pdf=book.pdf book/index.html
           cd book && zip -r ../book.zip . && cd ..
 
-      - name: Generate changelog, summary, and README
-        run: |
-          git fetch --prune --unshallow || true
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          NEW_TAG="v$(date +'%Y.%m.%d.%H%M%S')"
-          if [ -z "$LAST_TAG" ]; then
-            git log --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
-          else
-            git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
-          fi
-          # Check if src/SUMMARY.md already exists
-          if [ ! -f src/SUMMARY.md ]; then
-            echo "# Summary" > src/SUMMARY.md
-            echo "- [Introduction](README.md)" >> src/SUMMARY.md
-            echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
-            echo "| Commit | Author | Message | Date |" > src/changelog.md
-            echo "|--------|--------|---------|------|" >> src/changelog.md
-          fi
-          cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
-            echo "| [$hash](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/$hash) | $author | $subject | $date |" >> src/changelog.md
-          done
-          echo "" > src/README.md
-          echo "# Project Documentation" >> src/README.md
-          echo "" >> src/README.md
-          echo "This is the autogenerated documentation site for **Into-The-Grey/Project-L.I.S.A-Guide**." >> src/README.md
-          echo "" >> src/README.md
-          echo "- 📘 Built using **mdBook** ${{ env.MDBOOK_VERSION }}" >> src/README.md
-          echo "- 🕒 Version: $NEW_TAG" >> src/README.md
-          echo "- 🔗 View online: [GitHub Pages](https://Into-The-Grey.github.io/Project-L.I.S.A-Guide)" >> src/README.md
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv theme/* book.toml
-          git commit -m "chore: update changelog, summary, README, and interactivity theme"
-          git tag $NEW_TAG
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git push origin $NEW_TAG
-          git push origin main
-
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -244,6 +206,57 @@ jobs:
           name: book-zip
           path: book.zip
 
+  generate-changelog:
+    name: Generate Changelog & Metadata
+    runs-on: ubuntu-latest
+    needs: build-book
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download book artifact for README context
+        uses: actions/download-artifact@v4
+        with:
+          name: book-zip
+          path: ./book
+
+      - name: Generate changelog, summary, and README
+        run: |
+          git fetch --prune --unshallow || true
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          NEW_TAG="v$(date +'%Y.%m.%d.%H%M%S')"
+          if [ -z "$LAST_TAG" ]; then
+            git log --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
+          else
+            git log $LAST_TAG..HEAD --pretty=format:"%h,%an,%s,%cd" --date=short > CHANGELOG.csv
+          fi
+          if [ ! -f src/SUMMARY.md ]; then
+            echo "# Summary" > src/SUMMARY.md
+            echo "- [Introduction](README.md)" >> src/SUMMARY.md
+            echo "- [Changelog](changelog.md)" >> src/SUMMARY.md
+            echo "| Commit | Author | Message | Date |" > src/changelog.md
+            echo "|--------|--------|---------|------|" >> src/changelog.md
+          fi
+          cat CHANGELOG.csv | while IFS=',' read -r hash author subject date; do
+            echo "| [$hash](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/$hash) | $author | $subject | $date |" >> src/changelog.md
+          done
+          echo "" > src/README.md
+          echo "# Project Documentation" >> src/README.md
+          echo "" >> src/README.md
+          echo "This is the autogenerated documentation site for **Into-The-Grey/Project-L.I.S.A-Guide**." >> src/README.md
+          echo "" >> src/README.md
+          echo "- 📘 Built using **mdBook** ${{ needs.build-book.env.MDBOOK_VERSION }}" >> src/README.md
+          echo "- 🕒 Version: $NEW_TAG" >> src/README.md
+          echo "- 🔗 View online: [GitHub Pages](https://Into-The-Grey.github.io/Project-L.I.S.A-Guide)" >> src/README.md
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add src/changelog.md src/SUMMARY.md src/README.md CHANGELOG.csv theme/* book.toml
+          git commit -m "chore: update changelog, summary, README, and interactivity theme"
+          git tag $NEW_TAG
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git push origin $NEW_TAG
+          git push origin main
+
       - name: Upload Changelog CSV
         uses: actions/upload-artifact@v4
         with:
@@ -251,11 +264,12 @@ jobs:
           path: CHANGELOG.csv
 
   deploy:
+    name: Deploy to GitHub Pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-book, generate-changelog]
     steps:
       - name: Deploy L.I.S.A MDBook to GitHub Pages
         id: deployment
