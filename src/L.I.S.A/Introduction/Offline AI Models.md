@@ -1,8 +1,6 @@
-
 **Context in LISA:**
 
 - Core intelligence engines that run locally without Internet, enabling natural language understanding, Q&A, and retrieval-augmented responses.
-    
 
 **Model Recommendations:**
 
@@ -45,6 +43,28 @@
     
 - **faiss-cpu** – vector index for retrieval-augmented QA
     
+
+**Benefits of Using Offline AI Models:**
+
+1. **Privacy and Security:**
+   - Data remains local, reducing the risk of data breaches and ensuring user privacy.
+   - No dependency on external servers, minimizing exposure to potential cyber threats.
+
+2. **Reduced Latency:**
+   - Faster response times as data processing and inference occur locally.
+   - Ideal for real-time applications where quick responses are crucial.
+
+3. **Cost Efficiency:**
+   - Eliminates the need for continuous internet connectivity, reducing data costs.
+   - No subscription fees for cloud-based AI services.
+
+4. **Customization and Control:**
+   - Full control over the AI models, allowing for customization and fine-tuning.
+   - Ability to update and modify models as per specific requirements.
+
+5. **Reliability:**
+   - Ensures consistent performance without relying on external factors like internet speed or server availability.
+   - Suitable for remote or offline environments where internet access is limited.
 
 **Suggested Sections for This Note:**
 
