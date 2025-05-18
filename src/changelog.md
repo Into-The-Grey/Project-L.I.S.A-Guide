@@ -8,3 +8,4 @@
 | [7e740d3](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/7e740d3) | [REDACTED] | Create README.md | 2025-05-17 |
 | [d75670c](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/d75670c) | [REDACTED] | Update SUMMARY.md | 2025-05-17 |
 | [f177ff5](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/f177ff5) | [REDACTED] | Update SUMMARY.md | 2025-05-17 |
+| [660cf3a](https://github.com/Into-The-Grey/Project-L.I.S.A-Guide/commit/660cf3a) | [REDACTED] | Merge pull request #3 from Into-The-Grey/add-detailed-data | 2025-05-17 |
