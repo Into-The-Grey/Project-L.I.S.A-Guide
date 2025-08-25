@@ -190,7 +190,7 @@ jobs:
           cd book && zip -r ../book.zip . && cd ..
 
       - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./book
 
