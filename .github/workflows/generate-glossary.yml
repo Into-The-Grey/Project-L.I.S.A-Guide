@@ -24,7 +24,7 @@ jobs:
           echo "$COUNT" > last_page_count.txt
 
       - name: Download previous workflow artifact if available
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: page-count
           path: .artifacts
