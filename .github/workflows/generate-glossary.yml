@@ -242,7 +242,7 @@ jobs:
           git push
 
       - name: Upload last page count artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: page-count
           path: last_page_count.txt

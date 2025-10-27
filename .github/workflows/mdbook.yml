@@ -195,13 +195,13 @@ jobs:
           path: ./book
 
       - name: Upload PDF version
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: book-pdf
           path: book.pdf
 
       - name: Upload ZIP version
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: book-zip
           path: book.zip
@@ -258,7 +258,7 @@ jobs:
           git push origin main
 
       - name: Upload Changelog CSV
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: changelog-csv
           path: CHANGELOG.csv
